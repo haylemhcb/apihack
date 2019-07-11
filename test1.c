@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
 
  nt = net_new();
 
- net_set_interf(nt, "wlp16s0");
+ net_set_interf(nt, "wlx30b5c2117c3f");
  net_activate_interf(nt);
 
  cad = net_wifi_get_ssid(nt);

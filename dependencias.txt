@@ -1,3 +1,5 @@
 net-tools
 iproute2
 tcpdump
+wget
+w3m
