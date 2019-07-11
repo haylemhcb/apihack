@@ -6,10 +6,185 @@
 #include <unistd.h>
 #include "netproto.h"
 #include <pthread.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <sys/wait.h>
+
+int net_is_internet(NET *nt)
+{
+  char b[20000] = {'\0'};
+  FILE *f = NULL;
+  int i = 0;
+   f = fopen("/tmp/lnxgoog", "r");
+	
+  if(f == NULL)
+   {
+      printf("\n\nNo existe /tmp/lnxgoog, saliendo...\n\n");
+	  ++contador;
+      return 0;
+   }
+   puts("VERIFICANDO SI HAY INTERNET...");
+ 
+   while(!feof(f))
+   {
+     b[i] = fgetc(f);
+	 if(b[i] == '&') b[i] = '_';
+	 if(b[i] == '|') b[i] = '_';
+	 if(b[i] == '!') b[i] = '_';
+	 if(b[i] == '>') b[i] = '_';
+	 if(b[i] == '<') b[i] = '_';
+     if(b[i] == EOF)
+     {
+       b[i] = '\0';
+       break;
+     }
+
+     ++i;
+     if(i >= (20000 - 1))
+     {
+       strcpy(b, "");
+       i = 0;
+	   break;
+     }
+  }
+  pclose(f);
+  if((strstr(b, "google") != NULL) || (strstr(b, "photos") != NULL))
+  {
+     puts("HAY INTERNET, GOOGLE DETECTADO");
+	 internetok = 1;
+	 contador = 0;
+	 remove("/tmp/lnxgoog");
+	 return 1;
+  }
+  else
+  {
+     puts("NO HAY INTERNET AUN!!!");
+	 internetok = 0;
+	 ++contador;
+	 return 0;
+  }
+	
+}
+
+int net_isdown_interf(NET *nt)
+{
+  char cmd[80];
+  char b[80] = {'\0'};
+  FILE *f = NULL;
+  int i = 0;
+
+  strcpy(cmd, "ip link show dev ");
+  strcat(cmd, nt->interf);
+  strcat(cmd, "|tr \">\" \"_\"|tr \" \" \"X\"|grep state|cut -d\",\" -f4|cut -d\"_\" -f1");
+	
+  f = popen(cmd, "r");
+	
+  if(f == NULL)
+   {
+      printf("\n\nNo existe ip link, saliendo...\n\n");
+      return 1;
+   }
+   puts("VERIFICANDO ESTADO ACTIVO DE INTERFACE...");
+ 
+   while(!feof(f))
+   {
+     b[i] = fgetc(f);
+     if(b[i] == EOF)
+     {
+       b[i] = '\0';
+       break;
+     }
+     ++i;
+     if(i >= 100)
+     {
+       strcpy(b, "");
+       i = 0;
+	   break;
+     }
+  }
+  pclose(f);
+  fprintf(stdout, "%s\n", b);
+  if(strcmp(b, "") == 0) {puts("ESTADO INTERFACE INDEFINIDO"); return 1;}
+  if(strcmp(b, "LOWER") != 0)
+	 {
+	   puts("ESTADO INTERFACE ENCENDIDA"); return 0;
+     }
+   else
+	{
+      puts("ESTADO INTERFACE APAGADA"); return 1;
+	}
+
+}
+
+void net_cap_set_timeout(NET *nt, int seg)
+{
+   nt->cap.timeout = seg;
+}
+
+void sys_exec_timeout(const char *args[] , int seg)
+{
+ pid_t pid;
+ pid = fork();
+ if(pid == -1) {perror("Error creando proceso fork"); return;}
+ if(pid == 0)
+ {
+    execvp(args[0], args);
+ }
+ else
+ {
+   sleep(seg);
+   kill(pid, SIGKILL);
+   wait(NULL);
+   fprintf(stdout, "Proceso terminado\n");
+ }
+}
+
+DOWNLOAD *download_new(void)
+{
+  strcpy(download.src, "http://www.google.com");
+  strcpy(download.dst, "/tmp/apihack_fileout");
+  return &download;
+}
+
+void download_set_src(DOWNLOAD *dw, const char *src)
+{
+  if(src == NULL)
+  {
+    strcpy(dw->src, "http://www.google.com");
+  }
+  else
+  {
+    strcpy(dw->src, src);
+  }
+}
+
+void download_set_dst(DOWNLOAD *dw,const char *dst)
+{
+  if(dst == NULL)
+  {
+    strcpy(dw->dst, "/tmp/apihack_fileout");
+  }
+  else
+  {
+    strcpy(dw->dst, dst);
+  }
+}
+
+void download_file(DOWNLOAD *dw)
+{
+  char cmd[2000] = {'\0'};
+  strcpy(cmd, "wget -T 3 -t 1 ");
+  strcat(cmd, dw->src);
+  strcat(cmd, " -O ");
+  strcat(cmd, dw->dst);
+  system(cmd);
+}
 
 NET *net_new(void)
 {
-
+  VARS.traffic = 1;
+  net.cap.timeout = 10;
+  net.cap.working = 0;
   strcpy(net.ip, "0.0.0.0");
   strcpy(net.interf, "wlan0");
   strcpy(net.mac, "54:04:a6:45:d5:50");
@@ -26,12 +201,62 @@ NET *net_new(void)
   return &net;
 }
 
+void verificacon(void)
+{
+  const char *argum[] = {"wget", "-T", "1", "-t", "1", "http://www.google.com", "-O", "/tmp/lnxgoog", 0};
+  if(net.cap.working == 1) return;
+  remove("/tmp/lnxgoog");
+  sys_exec_timeout (argum, 1);
+  puts("TIEMPO VERIFICACION GOOGLE TERMINADO.");
+}
+
+void fnw3m(void)
+{
+  const char *argum[] = {"w3m", "http://www.google.com", 0};
+  if(net.cap.working == 1) return;
+  sys_exec_timeout (argum, 1);
+  puts("TIEMPO VERIFICACION W3M TERMINADO.");
+}
+
+void net_stop_traffic_gen(void)
+{
+  VARS.traffic = 0;
+}
+
+int net_keep_traffic_active(void)
+{
+  pthread_t vgoogle;
+  pthread_t w3m;
+  int res = 0;
+
+
+
+  while(VARS.traffic == 1)
+  {
+   res = pthread_create(&vgoogle, NULL, &verificacon, NULL);
+   if(res != 0) return 1;
+   res = pthread_create(&w3m, NULL, &fnw3m, NULL);
+   if(res != 0) return 1;
+   sleep(1);
+
+   /* Verifica si hay conexion */
+   net_is_internet(&net);
+   
+
+   if(contador >= 100) {contador = 0; return;}
+   if(contador == 50) { net_wifi_deasoc(&net); }
+  } 
+}
+
 void capt(NET *nt) /* funcion de hilo */
 {
    FILE *tcp = NULL;
    int i = 0;
-
+	
+   if(nt->cap.working == 1) return;
    nt->cap.id = pthread_self();
+
+   nt->cap.working = 1;
    net_activate_interf(nt);
    tcp = popen(nt->cap.cmd, "r");
    if(tcp == NULL)
@@ -50,13 +275,15 @@ void capt(NET *nt) /* funcion de hilo */
        break;
      }
      ++i;
-     if(i >= 8999)
+     if(i >= 1000)
      {
        strcpy(nt->cap.bufer, "");
        i = 0;
+	   break;
      }
   }
   pclose(tcp);
+  nt->cap.working = 0;
   puts(nt->cap.bufer);
   if(strcmp(nt->cap.bufer, "") == 0) puts("NADA CAPTURADO AUN"); else puts("SE CAPTURARON DATOS");
 }
@@ -180,7 +407,7 @@ const char *net_cap_get_ip(NET *nt)
 
 }
 
-void * net_wifi_monitor_off(NET *nt)
+void net_wifi_monitor_off(NET *nt)
 {
    net_deactivate_interf(nt);
    net_wifi_mode_managed(nt);
@@ -208,6 +435,7 @@ void net_wifi_mode_managed(NET *nt)
 void net_cap_dump(NET *n)
 { 
    void capt(NET *nt);
+   int res = 0;
    strcpy(n->cap.cmd, "tcpdump");
    if(strcmp(n->cap.monitor, "1") == 0)
 		   strcat(n->cap.cmd, " -I");
@@ -221,15 +449,18 @@ void net_cap_dump(NET *n)
    strcat(n->cap.cmd, " and tcp and not host ");
    strcat(n->cap.cmd, n->gateway);
 
-   pthread_create(&n->cap.hilocaptura, NULL, &capt, n);
-   sleep(10);
+   res = pthread_create(&n->cap.hilocaptura, NULL, &capt, n);
+   if(res != 0) return;
+   sleep(n->cap.timeout);
+   pthread_cancel(n->cap.id);
    if(pthread_cancel(n->cap.id) == 0)
    {
      puts("Hilo de captura terminado.");
      fprintf(stdout, "ID del hilo de captura %d\n", n->cap.id); 
    }
+	 sys_pkill("tcpdump");
      net_wifi_monitor_off(n);
-     sys_pkill("tcpdump");
+
 }
 
 void net_cap_set_range(NET *n, const char *range)
@@ -263,7 +494,7 @@ void net_wifi_dump(NET *n)
   char buf[1024] = {'\0'};
   int i = 0;
   FILE *f = NULL;
-
+  system("echo \"\">/tmp/datoswifi"); 
   strcpy(cmd, "iw dev ");
   strcat(cmd, n->interf);
   strcat(cmd, " link");
@@ -562,7 +793,7 @@ void net_deactivate_interf(NET *n)
  pclose(f);
 
  net_flush_ip(n); /* Liberar la ips de la tarjeta evita problemas de parseo */
-
+ sleep(1);
 }
 
 void net_flush_ip(NET *n)
@@ -599,6 +830,7 @@ void net_apply_config(NET *n)
 {
     char cmd[80] = {'\0'};
     FILE *f = NULL;
+	char *c;
 
     net_deactivate_interf(n);
 
@@ -609,11 +841,11 @@ void net_apply_config(NET *n)
     strcat(cmd, n->mac);
 
     f = popen(cmd, "r");
-    if(f == NULL) ; else
+    if(f == NULL) return; else
     {
      printf("Definiendo MAC via ip en %s = %s\n", n->interf, n->mac); 
     }
-
+   while(!feof(f)) c = fgetc(f);
    pclose(f);
 
    strcpy(cmd, "ifconfig  ");
@@ -622,11 +854,11 @@ void net_apply_config(NET *n)
    strcat(cmd, n->mac);
 
    f = popen(cmd, "r");
-   if(f == NULL) ; else
+   if(f == NULL) return; else
    {
     printf("Definiendo MAC via ifconfig en %s = %s\n", n->interf, n->mac); 
    }
-
+   while(!feof(f)) c = fgetc(f);
    pclose(f);
 
  
@@ -634,17 +866,17 @@ void net_apply_config(NET *n)
 
     /* Poner IP */
     net_flush_ip(n);
-    strcpy(cmd, "ip address add ");
+    strcpy(cmd, "ip address change global ");
     strcat(cmd, n->ip);
     strcat(cmd, "/24 dev ");
     strcat(cmd, n->interf);
 
     f = popen(cmd, "r");
-    if(f == NULL) ; else
+    if(f == NULL) return; else
     {
      printf("Definiendo IP via ip en %s = %s\n", n->interf, n->ip); 
     }
-
+   while(!feof(f)) c = fgetc(f);
    pclose(f);
 
     strcpy(cmd, "ifconfig ");
@@ -653,11 +885,11 @@ void net_apply_config(NET *n)
     strcat(cmd, n->ip);
 
     f = popen(cmd, "r");
-    if(f == NULL) ; else
+    if(f == NULL) return; else
     {
      printf("Definiendo IP via ifconfig en %s = %s\n", n->interf, n->ip); 
     }
-
+   while(!feof(f)) c = fgetc(f);
    pclose(f);
 
   /*------------------------------------------------------------------------*/
@@ -669,10 +901,11 @@ void net_apply_config(NET *n)
     strcat(cmd, n->interf);
 
     f = popen(cmd, "r");
-    if(f == NULL) ; else
+    if(f == NULL) return; else
     {
      printf("Definiendo pasarela via route en %s = %s\n", n->interf, n->gateway); 
     }
+   while(!feof(f)) c = fgetc(f);
     pclose(f);
 
     strcpy(cmd, "ip route add default via ");
@@ -685,6 +918,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo pasarela via ip en %s = %s\n", n->interf, n->gateway); 
     }
+   while(!feof(f)) c = fgetc(f);
     pclose(f);
 
    /*--------------------------------------------------------------------------*/
@@ -699,6 +933,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo MTU via ifconfig en %s = %s\n", n->interf, n->mtu); 
     }
+   while(!feof(f)) c = fgetc(f);
     pclose(f);
 
     strcpy(cmd, "ip link set dev ");
@@ -711,6 +946,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo MTU via ip en %s = %s\n", n->interf, n->mtu); 
     }
+   while(!feof(f)) c = fgetc(f);
     pclose(f);
 
 
@@ -733,6 +969,7 @@ void net_stop_nmanager(void)
     }
 
    pclose(f);
+   sleep(2);
 }
 
 void net_start_nmanager(void)
@@ -749,6 +986,7 @@ void net_start_nmanager(void)
     }
 
    pclose(f);
+   sleep(2);
 }
 
 void net_set_gateway(NET *n, const char *gateway)
@@ -939,9 +1177,26 @@ void net_wifi_deasoc(NET *nt)
 
 }
 
+void net_clean_dns_file(NET *nt)
+{
+   FILE *f = NULL;
+
+   /* Vaciar el archivo de dns */
+   f = fopen(nt->resolvfile, "w");
+   if(f == NULL) 
+   {
+       printf("No se pudo escribir en %s.\n");
+      return;
+   }
+   fprintf(f, "");
+   fclose(f);
+}
+
 void net_add_dns(NET *nt, const char *dns)
 {
    FILE *f = NULL;
+
+   /*------------------------------------------*/
 
    f = fopen(nt->resolvfile, "a");
    if(f == NULL) 
