@@ -25,6 +25,26 @@
 #include <sys/stat.h>
 
 void file_save_data(const char *filename, const char *data);
+void sys_tcp_low_latency(void);
+void * sys_copy_file(const char *orig, const char *dest);
+void * deb_pack_paq(const char *dirstructura, const char *dirfinal);
+void sys_wifi_set_country(const char *country); /* US, ES, etc */
+
+
+void sys_wifi_set_country(const char *country)
+{
+  char cmd[80] = {'\0'};
+  strcpy(cmd, "iw reg set ");
+  strcat(cmd, country);
+  printf("Nacionalidad puesta en %s\n", country);
+  system(cmd);
+}
+
+
+void sys_tcp_low_latency(void)
+{
+ system("sysctl net.ipv4.tcp_low_latency=1");
+}
 
 void * sys_crea_desktop_file(const char *nombre, const char *destino, const char *coment,
                            const char *descripcion, const char *exec,

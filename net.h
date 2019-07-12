@@ -10,6 +10,36 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+void net_wifi_set_rate(NET *n, const char *rate)
+{
+  char cmd[80] = {'\0'};
+  strcpy(cmd, "iwconfig ");
+  strcat(cmd, n->interf);
+  strcat(cmd, " rate ");
+  strcat(cmd, rate);
+  printf("Poniendo bit rate  a %s via iwconfig\n", rate);
+  system(cmd);
+
+
+  strcpy(cmd, "iw ");
+  strcat(cmd, n->interf);
+  strcat(cmd, " set bitrates legacy-2.4 ");
+  strcat(cmd, rate);
+  printf("Poniendo bit rate  a %s via iw\n", rate);
+  system(cmd);
+}
+
+void net_wifi_set_retry_limit(NET *n, const char *retry)
+{
+  char cmd[80] = {'\0'};
+  strcpy(cmd, "iwconfig ");
+  strcat(cmd, n->interf);
+  strcat(cmd, " retry ");
+  strcat(cmd, retry);
+  printf("Poniendo retry limit a %s\n", retry);
+  system(cmd);
+}
+
 int net_is_internet(NET *nt)
 {
   char b[20000] = {'\0'};
@@ -75,7 +105,8 @@ int net_isdown_interf(NET *nt)
 
   strcpy(cmd, "ip link show dev ");
   strcat(cmd, nt->interf);
-  strcat(cmd, "|tr \">\" \"_\"|tr \" \" \"X\"|grep state|cut -d\",\" -f4|cut -d\"_\" -f1");
+
+  strcpy(b, "");
 	
   f = popen(cmd, "r");
 	
@@ -94,18 +125,19 @@ int net_isdown_interf(NET *nt)
        b[i] = '\0';
        break;
      }
-     ++i;
-     if(i >= 100)
+	   
+     if(i >= 79)
      {
        strcpy(b, "");
        i = 0;
 	   break;
      }
+	   ++i;
   }
   pclose(f);
   fprintf(stdout, "%s\n", b);
   if(strcmp(b, "") == 0) {puts("ESTADO INTERFACE INDEFINIDO"); return 1;}
-  if(strcmp(b, "LOWER") != 0)
+  if(strstr(b, "LOWER_UP") != NULL)
 	 {
 	   puts("ESTADO INTERFACE ENCENDIDA"); return 0;
      }
@@ -203,10 +235,10 @@ NET *net_new(void)
 
 void verificacon(void)
 {
-  const char *argum[] = {"wget", "-T", "1", "-t", "1", "http://www.google.com", "-O", "/tmp/lnxgoog", 0};
+  const char *argum[] = {"wget", "-T", "2", "-t", "1", "http://www.google.com", "-O", "/tmp/lnxgoog", 0};
   if(net.cap.working == 1) return;
   remove("/tmp/lnxgoog");
-  sys_exec_timeout (argum, 1);
+  sys_exec_timeout (argum, 2);
   puts("TIEMPO VERIFICACION GOOGLE TERMINADO.");
 }
 
@@ -214,7 +246,7 @@ void fnw3m(void)
 {
   const char *argum[] = {"w3m", "http://www.google.com", 0};
   if(net.cap.working == 1) return;
-  sys_exec_timeout (argum, 1);
+  sys_exec_timeout (argum, 2);
   puts("TIEMPO VERIFICACION W3M TERMINADO.");
 }
 
@@ -237,7 +269,7 @@ int net_keep_traffic_active(void)
    if(res != 0) return 1;
    res = pthread_create(&w3m, NULL, &fnw3m, NULL);
    if(res != 0) return 1;
-   sleep(1);
+   sleep(2);
 
    /* Verifica si hay conexion */
    net_is_internet(&net);
@@ -430,6 +462,18 @@ void net_wifi_mode_managed(NET *nt)
 
    while(!feof(f)) fgetc(f);
    fclose(f);
+
+
+   strcpy(cmd, "iw ");
+   strcat(cmd, nt->interf);
+   strcat(cmd, " set type managed");
+
+   f = popen(cmd, "r");
+
+   if(f == NULL) return;
+
+   while(!feof(f)) fgetc(f);
+   fclose(f);
 }
 
 void net_cap_dump(NET *n)
@@ -604,6 +648,43 @@ char * net_wifi_get_ssid(NET *n)
   return strdup(buf);
 }
 
+char * net_wifi_get_bssid(NET *n)
+{
+  char cmd[80] = {'\0'};
+  char buf[1024] = {'\0'};
+  int i = 0;
+  FILE *f = NULL;
+
+  net_wifi_dump(n);
+
+  strcpy(cmd, "cat /tmp/datoswifi|grep \"(\"|cut -d\" \" -f3|grep -v bytes");
+ 
+  f = popen(cmd, "r");
+
+  if(f == NULL)
+   return NULL;
+  else
+  {
+    while(!feof(f))
+    {
+      buf[i] = fgetc(f);
+      if(buf[i] == EOF)
+       break;
+
+      if(buf[i] == ' ') buf[i] = '\r';
+      if(buf[i] == '\n') buf[i] = '\r';
+
+      ++i;
+    }
+    buf[i] = '\0';
+  }
+  pclose(f);
+
+  if(strcmp(buf, "") == 0) return "Desconectado";
+
+  return strdup(buf);
+
+}
 
 char * net_wifi_get_signal(NET *n)
 {
@@ -1185,7 +1266,7 @@ void net_clean_dns_file(NET *nt)
    f = fopen(nt->resolvfile, "w");
    if(f == NULL) 
    {
-       printf("No se pudo escribir en %s.\n");
+       printf("No se pudo escribir en %s.\n", nt->resolvfile);
       return;
    }
    fprintf(f, "");
@@ -1201,7 +1282,7 @@ void net_add_dns(NET *nt, const char *dns)
    f = fopen(nt->resolvfile, "a");
    if(f == NULL) 
    {
-       printf("No se pudo escribir en %s.\n");
+       printf("No se pudo escribir en %s.\n", nt->resolvfile);
       return;
    }
 
