@@ -7,6 +7,7 @@ int internetok = 0;
 struct APIHACK_VARS
 {
    int traffic; /* Parar 0 o activar 1 el generador de trafico */
+   int emergencyexit;
 } VARS;
 
 struct WIRELESS
@@ -73,6 +74,7 @@ void net_wifi_deasoc(NET *nt);
 void net_wifi_mode_managed(NET *nt);
 void net_wifi_monitor_off(NET *nt);
 void net_wifi_set_rate(NET *n, const char *rate);
+void net_wifi_set_channel(NET *n, const char *canal);
 void net_dump(NET *n);
 char * net_wifi_get_ssid(NET *n);
 char * net_wifi_get_signal(NET *n);

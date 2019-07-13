@@ -10,6 +10,25 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+void net_wifi_set_channel(NET *n, const char *canal)
+{
+  char cmd[80] = {'\0'};
+  strcpy(cmd, "iwconfig ");
+  strcat(cmd, n->interf);
+  strcat(cmd, " channel ");
+  strcat(cmd, canal);
+  printf("Poniendo canal %s via iwconfig\n", canal);
+  system(cmd);
+
+
+  strcpy(cmd, "iw ");
+  strcat(cmd, n->interf);
+  strcat(cmd, " set channel ");
+  strcat(cmd, canal);
+  printf("Poniendo canal %s via iw\n", canal);
+  system(cmd);
+}
+
 void net_wifi_set_rate(NET *n, const char *rate)
 {
   char cmd[80] = {'\0'};
@@ -98,7 +117,7 @@ int net_is_internet(NET *nt)
 
 int net_isdown_interf(NET *nt)
 {
-  char cmd[80];
+  char cmd[250];
   char b[80] = {'\0'};
   FILE *f = NULL;
   int i = 0;
@@ -126,7 +145,7 @@ int net_isdown_interf(NET *nt)
        break;
      }
 	   
-     if(i >= 79)
+     if(i >= 240)
      {
        strcpy(b, "");
        i = 0;
@@ -215,6 +234,7 @@ void download_file(DOWNLOAD *dw)
 NET *net_new(void)
 {
   VARS.traffic = 1;
+  VARS.emergencyexit = 0;
   net.cap.timeout = 10;
   net.cap.working = 0;
   strcpy(net.ip, "0.0.0.0");
@@ -692,7 +712,7 @@ char * net_wifi_get_signal(NET *n)
   char buf[1024] = {'\0'};
   int i = 0;
   FILE *f = NULL;
-
+  if(VARS.emergencyexit == 1) return "Parado";
   net_wifi_dump(n);
 
   strcpy(cmd, "cat /tmp/datoswifi|grep \"sign\"|cut -f2 -d\":\"");
@@ -708,7 +728,7 @@ char * net_wifi_get_signal(NET *n)
       buf[i] = fgetc(f);
       if(buf[i] == EOF)
        break;
-
+	  if(VARS.emergencyexit == 1) return "Parado";
       if(buf[0] == ' ') buf[i] = '\r';
       if(buf[i] == '\n') buf[i] = '\r';
 
@@ -913,7 +933,9 @@ void net_apply_config(NET *n)
     FILE *f = NULL;
 	char *c;
 
+	if(VARS.emergencyexit == 1) return;
     net_deactivate_interf(n);
+	if(VARS.emergencyexit == 1) return;
 
     /* Poner MAC */
     strcpy(cmd, "ip link set dev ");
@@ -928,6 +950,7 @@ void net_apply_config(NET *n)
     }
    while(!feof(f)) c = fgetc(f);
    pclose(f);
+   if(VARS.emergencyexit == 1) return;
 
    strcpy(cmd, "ifconfig  ");
    strcat(cmd, n->interf);
@@ -941,6 +964,7 @@ void net_apply_config(NET *n)
    }
    while(!feof(f)) c = fgetc(f);
    pclose(f);
+   if(VARS.emergencyexit == 1) return;
 
  
   /*--------------------------------------------------------------------*/
@@ -1030,9 +1054,10 @@ void net_apply_config(NET *n)
    while(!feof(f)) c = fgetc(f);
     pclose(f);
 
-
+	if(VARS.emergencyexit == 1) return;
 
     net_activate_interf(n);
+    if(VARS.emergencyexit == 1) return;
 
 }
 
