@@ -156,7 +156,7 @@ int net_isdown_interf(NET *nt)
   pclose(f);
   fprintf(stdout, "%s\n", b);
   if(strcmp(b, "") == 0) {puts("ESTADO INTERFACE INDEFINIDO"); return 1;}
-  if(strstr(b, "LOWER_UP") != NULL)
+  if(strstr(b, "BROADCAST,MULTICAST,UP") != NULL)
 	 {
 	   puts("ESTADO INTERFACE ENCENDIDA"); return 0;
      }
@@ -281,7 +281,7 @@ int net_keep_traffic_active(void)
   pthread_t w3m;
   int res = 0;
 
-
+  remove("/tmp/lnxgoog");
 
   while(VARS.traffic == 1)
   {
@@ -317,9 +317,10 @@ void capt(NET *nt) /* funcion de hilo */
       return;
    }
    puts("CAPTURANDO...");
- 
+   strcpy(nt->cap.bufer, "");
    while(!feof(tcp))
    {
+	 if(VARS.emergencyexit == 1) {strcpy(nt->cap.bufer, ""); return;}
      nt->cap.bufer[i] = fgetc(tcp);
      if(nt->cap.bufer[i] == EOF)
      {
@@ -327,7 +328,7 @@ void capt(NET *nt) /* funcion de hilo */
        break;
      }
      ++i;
-     if(i >= 1000)
+     if(i >= 8000)
      {
        strcpy(nt->cap.bufer, "");
        i = 0;
@@ -427,10 +428,10 @@ const char *net_cap_get_ip(NET *nt)
   char b[10000] = {'\0'};
   char *token = NULL, *token1 = NULL, *token2 = NULL, *token3 = NULL, *token4 = NULL;
   char ip[40];
-
+   if(VARS.emergencyexit == 1) return "PARADO";
   strcpy(b, nt->cap.bufer);
 
-  if(strcmp(b, "") == 0) {puts("IP NO CAPTURADA"); return "NOIP";}
+  if(strcmp(b, "") == 0) {puts("IP NO CAPTURADA"); strcpy(nt->cap.bufer, ""); return "NOIP";}
 
   strcpy(b, strstr(b, "ethertype"));
   strcpy(b, strstr(b, ">"));
@@ -452,7 +453,7 @@ const char *net_cap_get_ip(NET *nt)
 
   token = ip;
 
-  if(token == NULL) {puts("IP NO CAPTURADA"); return "NOIP";}
+  if(token == NULL) {puts("IP NO CAPTURADA"); strcpy(nt->cap.bufer, ""); return "NOIP";}
 
   fprintf(stdout, "SE HA CAPTURADO UNA VICTIMA SU IP ES %s\n", token);
   return strdup(token);
@@ -461,6 +462,7 @@ const char *net_cap_get_ip(NET *nt)
 
 void net_wifi_monitor_off(NET *nt)
 {
+   if(VARS.emergencyexit == 1) return;
    net_deactivate_interf(nt);
    net_wifi_mode_managed(nt);
    net_activate_interf(nt);
@@ -471,7 +473,7 @@ void net_wifi_mode_managed(NET *nt)
 {
    FILE *f;
    char cmd[250] = {'\0'};
-
+   if(VARS.emergencyexit == 1) return;
    strcpy(cmd, "iwconfig ");
    strcat(cmd, nt->interf);
    strcat(cmd, " mode Managed");
@@ -500,6 +502,7 @@ void net_cap_dump(NET *n)
 { 
    void capt(NET *nt);
    int res = 0;
+  if(VARS.emergencyexit == 1) return;
    strcpy(n->cap.cmd, "tcpdump");
    if(strcmp(n->cap.monitor, "1") == 0)
 		   strcat(n->cap.cmd, " -I");
@@ -523,6 +526,7 @@ void net_cap_dump(NET *n)
      fprintf(stdout, "ID del hilo de captura %d\n", n->cap.id); 
    }
 	 sys_pkill("tcpdump");
+	 if(VARS.emergencyexit == 1) return;
      net_wifi_monitor_off(n);
 
 }
@@ -558,6 +562,8 @@ void net_wifi_dump(NET *n)
   char buf[1024] = {'\0'};
   int i = 0;
   FILE *f = NULL;
+  if(VARS.emergencyexit == 1) return;
+  remove("/tmp/datoswifi");
   system("echo \"\">/tmp/datoswifi"); 
   strcpy(cmd, "iw dev ");
   strcat(cmd, n->interf);
@@ -599,6 +605,7 @@ void net_dump(NET *n)
   int i = 0;
   FILE *f = NULL;
 
+  remove("/tmp/datosnet");
   strcpy(cmd, "ip addr show dev ");
   strcat(cmd, n->interf);
 
@@ -750,7 +757,7 @@ char * net_get_ip(NET *n)
   char buf[1024] = {'\0'};
   int i = 0;
   FILE *f = NULL;
-
+   if(VARS.emergencyexit == 1) return;
   net_dump(n);
 
   strcpy(cmd, "cat /tmp/datosnet|grep inet|grep global|cut -d\"/\" -f1|cut -d\"t\" -f2");
@@ -763,6 +770,7 @@ char * net_get_ip(NET *n)
   {
     while(!feof(f))
     {
+		   if(VARS.emergencyexit == 1) return "PARADO";
       buf[i] = fgetc(f);
       if(buf[i] == EOF)
        break;
@@ -860,7 +868,7 @@ void net_activate_interf(NET *n)
 {
  char cmd[80] = {'\0'};
  FILE *f = NULL;
-
+ if(VARS.emergencyexit == 1);
  strcpy(cmd, "ip link set ");
  strcat(cmd, n->interf);
  strcat(cmd, " up");
@@ -880,7 +888,7 @@ void net_deactivate_interf(NET *n)
 {
  char cmd[80] = {'\0'};
  FILE *f = NULL;
-
+ if(VARS.emergencyexit == 1) return;
  strcpy(cmd, "ip link set ");
  strcat(cmd, n->interf);
  strcat(cmd, " down");
@@ -1146,7 +1154,7 @@ char * net_get_mtu(NET *n)
   char buf[1024] = {'\0'};
   int i = 0;
   FILE *f = NULL;
-
+  if(VARS.emergencyexit == 1) return "Parado";
   net_dump(n);
   strcpy(cmd, "cat /tmp/datosnet |grep \"mtu\"|cut -d\">\" -f2|cut -d\" \" -f3");
 
@@ -1193,7 +1201,7 @@ void net_wifi_asoc_open(NET *nt)
 {
    char cmd[80] = {'\0'};
    FILE *f = NULL;
-
+   if(VARS.emergencyexit == 1) return;
    strcpy(cmd, "iw dev ");
    strcat(cmd, nt->interf);
    strcat(cmd, " connect ");
