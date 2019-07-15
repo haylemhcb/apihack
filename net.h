@@ -10,6 +10,22 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+void sys_net_ping(const char *host, int flood)
+{
+  char cmd[80] = {'\0'};
+
+ if(flood == 1)
+    {
+	   strcpy(cmd, "ping -f ");
+    }
+ else
+	{
+	   strcpy(cmd, "ping ");	
+	}
+	strcat(cmd, host);
+	system(cmd);
+}
+
 void net_wifi_set_channel(NET *n, const char *canal)
 {
   char cmd[80] = {'\0'};
@@ -97,6 +113,16 @@ int net_is_internet(NET *nt)
      }
   }
   pclose(f);
+
+   if((strstr(b, "Etecsa") != NULL) || (strstr(b, "etecsa") != NULL))
+   {
+     puts("SESION DE CUENTA TERMINADA..");
+	 internetok = 0;
+	 contador = 0;
+	 remove("/tmp/lnxgoog");
+	 return 2;
+   }
+	
   if((strstr(b, "google") != NULL) || (strstr(b, "photos") != NULL))
   {
      puts("HAY INTERNET, GOOGLE DETECTADO");
@@ -107,11 +133,13 @@ int net_is_internet(NET *nt)
   }
   else
   {
-     puts("NO HAY INTERNET AUN!!!");
+	 puts("NO HAY INTERNET AUN!!!");
 	 internetok = 0;
 	 ++contador;
 	 return 0;
   }
+
+
 	
 }
 
@@ -245,7 +273,7 @@ NET *net_new(void)
   strcpy(net.w.rate, "1M");
   strcpy(net.w.rts, "off");
   strcpy(net.w.frag, "off");
-  strcpy(net.w.txpower, "auto");
+  strcpy(net.w.txpower, "fixed 500");
   strcpy(net.w.essid, "WIFI_ETECSA");
   strcpy(net.cap.port, "https");
   strcpy(net.cap.monitor, "0");
@@ -260,6 +288,11 @@ void verificacon(void)
   remove("/tmp/lnxgoog");
   sys_exec_timeout (argum, 2);
   puts("TIEMPO VERIFICACION GOOGLE TERMINADO.");
+}
+
+void fnping(void)
+{
+  sys_net_ping ("google.com", 1);
 }
 
 void fnw3m(void)
@@ -279,9 +312,13 @@ int net_keep_traffic_active(void)
 {
   pthread_t vgoogle;
   pthread_t w3m;
+  pthread_t ping;
   int res = 0;
-
+  sys_pkill ("ping");
   remove("/tmp/lnxgoog");
+  res = pthread_create(&ping, NULL, &fnping, NULL);
+   if(res != 0) return 1;
+
 
   while(VARS.traffic == 1)
   {
@@ -289,10 +326,14 @@ int net_keep_traffic_active(void)
    if(res != 0) return 1;
    res = pthread_create(&w3m, NULL, &fnw3m, NULL);
    if(res != 0) return 1;
+ 
    sleep(2);
 
    /* Verifica si hay conexion */
-   net_is_internet(&net);
+   if(net_is_internet(&net) == 2)
+   {
+      return;
+   }
    
 
    if(contador >= 100) {contador = 0; return;}
@@ -305,7 +346,7 @@ void capt(NET *nt) /* funcion de hilo */
    FILE *tcp = NULL;
    int i = 0;
 	
-   if(nt->cap.working == 1) return;
+   if(nt->cap.working == 1) { sys_pkill ("tcpdump"); nt->cap.working = 0; strcpy(nt->cap.bufer, ""); return;}
    nt->cap.id = pthread_self();
 
    nt->cap.working = 1;
@@ -320,7 +361,7 @@ void capt(NET *nt) /* funcion de hilo */
    strcpy(nt->cap.bufer, "");
    while(!feof(tcp))
    {
-	 if(VARS.emergencyexit == 1) {strcpy(nt->cap.bufer, ""); return;}
+	 if(VARS.emergencyexit == 1) {   nt->cap.working = 0; strcpy(nt->cap.bufer, ""); return;}
      nt->cap.bufer[i] = fgetc(tcp);
      if(nt->cap.bufer[i] == EOF)
      {
@@ -478,6 +519,7 @@ void net_wifi_mode_managed(NET *nt)
    strcat(cmd, nt->interf);
    strcat(cmd, " mode Managed");
 
+   puts("Cambiando modo de tarjeta de red");
    f = popen(cmd, "r");
 
    if(f == NULL) return;
@@ -502,6 +544,8 @@ void net_cap_dump(NET *n)
 { 
    void capt(NET *nt);
    int res = 0;
+	  sys_pkill ("ping");
+	  sys_pkill ("tcpdump");
   if(VARS.emergencyexit == 1) return;
    strcpy(n->cap.cmd, "tcpdump");
    if(strcmp(n->cap.monitor, "1") == 0)
@@ -516,8 +560,10 @@ void net_cap_dump(NET *n)
    strcat(n->cap.cmd, " and tcp and not host ");
    strcat(n->cap.cmd, n->gateway);
 
+	
    res = pthread_create(&n->cap.hilocaptura, NULL, &capt, n);
-   if(res != 0) return;
+   if(res != 0) { puts("Hilo de captura no creado"); return;}
+	
    sleep(n->cap.timeout);
    pthread_cancel(n->cap.id);
    if(pthread_cancel(n->cap.id) == 0)
@@ -555,6 +601,20 @@ void net_set_interf(NET *n, const char *interf)
  strcpy(n->interf, interf);
 }
 
+void net_wifi_set_rts(NET *n, const char *rts)
+{
+  strcpy(n->w.rts, rts);
+}
+
+void net_wifi_set_frag(NET *n, const char *frag)
+{
+  strcpy(n->w.frag, frag);
+}
+
+void net_wifi_set_txpower(NET *n, const char *dbm)
+{
+  strcpy(n->w.txpower, dbm);
+}
 
 void net_wifi_dump(NET *n)
 {
@@ -925,6 +985,28 @@ void net_flush_ip(NET *n)
 
 }
 
+void net_wifi_no_power_save(NET *n)
+{
+  char cmd[80] = {'\0'};
+  strcpy(cmd, "iw ");
+  strcat(cmd, n->interf);
+  strcat(cmd, " set power_save off ");
+
+  printf("Desabilitando power save\n");
+  system(cmd);
+}
+
+void net_wifi_set_bssid(NET *n, const char *bssid)
+{
+  char cmd[80] = {'\0'};
+  strcpy(cmd, "iwconfig ");
+  strcat(cmd, n->interf);
+  strcat(cmd, " ap ");
+  strcat(cmd, bssid);
+  printf("Anclando %s via iwconfig\n", bssid);
+  system(cmd);
+}
+
 void net_set_ip(NET *n, const char *ip)
 {
    strcpy(n->ip, ip);
@@ -944,6 +1026,30 @@ void net_apply_config(NET *n)
 	if(VARS.emergencyexit == 1) return;
     net_deactivate_interf(n);
 	if(VARS.emergencyexit == 1) return;
+
+    /* Poner rts */
+    strcpy(cmd, "iwconfig ");
+    strcat(cmd, n->interf);
+    strcat(cmd, " rts ");
+    strcat(cmd, n->w.rts);	
+	printf("Definiendo RTS via iwconfig en %s = %s\n", n->interf, n->w.rts); 
+	system(cmd);
+
+	    /* Poner frag */
+    strcpy(cmd, "iwconfig ");
+    strcat(cmd, n->interf);
+    strcat(cmd, " frag ");
+    strcat(cmd, n->w.frag);	
+	printf("Definiendo FRAG via iwconfig en %s = %s\n", n->interf, n->w.frag); 
+	system(cmd);
+
+	    /* Poner rxpower */
+    strcpy(cmd, "iw ");
+    strcat(cmd, n->interf);
+    strcat(cmd, " txpower ");
+    strcat(cmd, n->w.txpower);	
+	printf("Definiendo txpower via iw en %s = %s\n", n->interf, n->w.txpower); 
+	system(cmd);
 
     /* Poner MAC */
     strcpy(cmd, "ip link set dev ");
@@ -1326,18 +1432,11 @@ void net_add_dns(NET *nt, const char *dns)
 
 void sys_pkill(const char *process)
 {
-   FILE *f;
-   char cmd[250] = {'\0'};
 
+   char cmd[250] = {'\0'};
    strcpy(cmd, "pkill ");
    strcat(cmd, process);
-
-   f = popen(cmd, "r");
-
-   if(f == NULL) return;
-
-   while(!feof(f)) fgetc(f);
-   fclose(f);
+   system(cmd);
 }
 
 #endif

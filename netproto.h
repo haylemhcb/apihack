@@ -69,11 +69,16 @@ NET *net_new(void);
 void net_set_interf(NET *n, const char *interf);
 void net_wifi_dump(NET *n);
 void net_wifi_set_ssid(NET *n, const char *ssid);
+void net_wifi_set_rts(NET *n, const char *rts);
+void net_wifi_set_frag(NET *n, const char *frag);
+void net_wifi_set_txpower(NET *n, const char *dbm);
 void net_wifi_asoc_open(NET *nt);
 void net_wifi_deasoc(NET *nt);
 void net_wifi_mode_managed(NET *nt);
 void net_wifi_monitor_off(NET *nt);
 void net_wifi_set_rate(NET *n, const char *rate);
+void net_wifi_set_bssid(NET *n, const char *bssid);
+void net_wifi_no_power_save(NET *n);
 void net_wifi_set_channel(NET *n, const char *canal);
 void net_dump(NET *n);
 char * net_wifi_get_ssid(NET *n);
@@ -112,4 +117,5 @@ void net_stop_traffic_gen(void);
 void net_clean_dns_file(NET *nt);
 int net_isdown_interf(NET *nt);
 int net_is_internet(NET *nt);
+void sys_net_ping(const char *host, int flood); /*1 flood  0 normal*/
 #endif
