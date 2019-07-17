@@ -27,11 +27,27 @@
 void file_save_data(const char *filename, const char *data);
 void sys_tcp_low_latency(void);
 void sys_disable_ipv6(void);
+const char * sys_read_line_file(const char *file);
 
 void * sys_copy_file(const char *orig, const char *dest);
 void * deb_pack_paq(const char *dirstructura, const char *dirfinal);
 void sys_wifi_set_country(const char *country); /* US, ES, etc */
 
+
+const char * sys_read_line_file(const char *file)
+{
+  FILE *f;
+  char data[80] = {'\0'};
+  char data2[80] = {'\0'};
+  f = fopen(file, "r");
+  if(f == NULL) return "NADA";
+
+  fscanf(f,"%s%s", data, data2);
+  strcat(data, " ");
+  strcat(data, data2);
+  fclose(f);
+  return strdup(data);
+}
 
 void sys_wifi_set_country(const char *country)
 {

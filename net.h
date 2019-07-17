@@ -93,6 +93,7 @@ int net_is_internet(NET *nt)
    while(!feof(f))
    {
      b[i] = fgetc(f);
+	   if(VARS.emergencyexit == 1) break;
 	 if(b[i] == '&') b[i] = '_';
 	 if(b[i] == '|') b[i] = '_';
 	 if(b[i] == '!') b[i] = '_';
@@ -167,6 +168,7 @@ int net_isdown_interf(NET *nt)
    while(!feof(f))
    {
      b[i] = fgetc(f);
+	   if(VARS.emergencyexit == 1) break;
      if(b[i] == EOF)
      {
        b[i] = '\0';
@@ -207,10 +209,12 @@ void sys_exec_timeout(const char *args[] , int seg)
  if(pid == -1) {perror("Error creando proceso fork"); return;}
  if(pid == 0)
  {
+   if(VARS.emergencyexit == 1) {kill(pid, SIGKILL); return;}
     execvp(args[0], args);
  }
  else
  {
+   if(VARS.emergencyexit == 1) {kill(pid, SIGKILL); return;}
    sleep(seg);
    kill(pid, SIGKILL);
    wait(NULL);
@@ -361,7 +365,7 @@ void capt(NET *nt) /* funcion de hilo */
    strcpy(nt->cap.bufer, "");
    while(!feof(tcp))
    {
-	 if(VARS.emergencyexit == 1) {   nt->cap.working = 0; strcpy(nt->cap.bufer, ""); return;}
+	 if(VARS.emergencyexit == 1) {   nt->cap.working = 0; strcpy(nt->cap.bufer, ""); break;}
      nt->cap.bufer[i] = fgetc(tcp);
      if(nt->cap.bufer[i] == EOF)
      {
@@ -469,7 +473,7 @@ const char *net_cap_get_ip(NET *nt)
   char b[10000] = {'\0'};
   char *token = NULL, *token1 = NULL, *token2 = NULL, *token3 = NULL, *token4 = NULL;
   char ip[40];
-   if(VARS.emergencyexit == 1) return "PARADO";
+   if(VARS.emergencyexit == 1){ strcpy(nt->cap.bufer, ""); return "NOIP";}
   strcpy(b, nt->cap.bufer);
 
   if(strcmp(b, "") == 0) {puts("IP NO CAPTURADA"); strcpy(nt->cap.bufer, ""); return "NOIP";}
@@ -524,8 +528,8 @@ void net_wifi_mode_managed(NET *nt)
 
    if(f == NULL) return;
 
-   while(!feof(f)) fgetc(f);
-   fclose(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break; fgetc(f);}
+   pclose(f);
 
 
    strcpy(cmd, "iw ");
@@ -536,8 +540,8 @@ void net_wifi_mode_managed(NET *nt)
 
    if(f == NULL) return;
 
-   while(!feof(f)) fgetc(f);
-   fclose(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break; fgetc(f);}
+   pclose(f);
 }
 
 void net_cap_dump(NET *n)
@@ -638,6 +642,7 @@ void net_wifi_dump(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+	if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
 
@@ -678,6 +683,7 @@ void net_dump(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+	if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
 
@@ -718,6 +724,7 @@ char * net_wifi_get_ssid(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+		if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
 
@@ -755,6 +762,7 @@ char * net_wifi_get_bssid(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+	  if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
 
@@ -793,9 +801,10 @@ char * net_wifi_get_signal(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+			  if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
-	  if(VARS.emergencyexit == 1) return "Parado";
+
       if(buf[0] == ' ') buf[i] = '\r';
       if(buf[i] == '\n') buf[i] = '\r';
 
@@ -830,7 +839,7 @@ char * net_get_ip(NET *n)
   {
     while(!feof(f))
     {
-		   if(VARS.emergencyexit == 1) return "PARADO";
+		   if(VARS.emergencyexit == 1) break;
       buf[i] = fgetc(f);
       if(buf[i] == EOF)
        break;
@@ -869,6 +878,7 @@ char * net_get_mac(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+			if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
 
@@ -906,6 +916,7 @@ char * net_get_gateway(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+					if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
 
@@ -1062,7 +1073,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo MAC via ip en %s = %s\n", n->interf, n->mac); 
     }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break; c = fgetc(f);}
    pclose(f);
    if(VARS.emergencyexit == 1) return;
 
@@ -1076,7 +1087,7 @@ void net_apply_config(NET *n)
    {
     printf("Definiendo MAC via ifconfig en %s = %s\n", n->interf, n->mac); 
    }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break; c = fgetc(f);}
    pclose(f);
    if(VARS.emergencyexit == 1) return;
 
@@ -1095,7 +1106,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo IP via ip en %s = %s\n", n->interf, n->ip); 
     }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break;c = fgetc(f);}
    pclose(f);
 
     strcpy(cmd, "ifconfig ");
@@ -1108,7 +1119,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo IP via ifconfig en %s = %s\n", n->interf, n->ip); 
     }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break;c = fgetc(f);}
    pclose(f);
 
   /*------------------------------------------------------------------------*/
@@ -1124,7 +1135,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo pasarela via route en %s = %s\n", n->interf, n->gateway); 
     }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)){if(VARS.emergencyexit == 1) break;c = fgetc(f);}
     pclose(f);
 
     strcpy(cmd, "ip route add default via ");
@@ -1137,7 +1148,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo pasarela via ip en %s = %s\n", n->interf, n->gateway); 
     }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break;c = fgetc(f);}
     pclose(f);
 
    /*--------------------------------------------------------------------------*/
@@ -1152,7 +1163,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo MTU via ifconfig en %s = %s\n", n->interf, n->mtu); 
     }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break;c = fgetc(f);}
     pclose(f);
 
     strcpy(cmd, "ip link set dev ");
@@ -1165,7 +1176,7 @@ void net_apply_config(NET *n)
     {
      printf("Definiendo MTU via ip en %s = %s\n", n->interf, n->mtu); 
     }
-   while(!feof(f)) c = fgetc(f);
+   while(!feof(f)) {if(VARS.emergencyexit == 1) break;c = fgetc(f);}
     pclose(f);
 
 	if(VARS.emergencyexit == 1) return;
@@ -1233,6 +1244,7 @@ const char **net_get_dns_list()
   while(!feof(f))
   {
     buf[k] = fgetc(f);
+	 if(VARS.emergencyexit == 1) break;
     if(buf[k] == EOF) { buf[k] = '\0'; buf[k - 1] = '\0' /* Quia linea blanco */; break; }
 
    ++k;
@@ -1273,6 +1285,7 @@ char * net_get_mtu(NET *n)
     while(!feof(f))
     {
       buf[i] = fgetc(f);
+		if(VARS.emergencyexit == 1) break;
       if(buf[i] == EOF)
        break;
 
@@ -1324,6 +1337,7 @@ void net_wifi_asoc_open(NET *nt)
   printf("Asociando con iw a %s.\n", nt->w.essid);
   while(!feof(f))
   {
+	  if(VARS.emergencyexit == 1) break;
      fgetc(f);
   }
   pclose(f);
@@ -1344,6 +1358,7 @@ void net_wifi_asoc_open(NET *nt)
   printf("Asociando con iwconfig a %s.\n", nt->w.essid);
   while(!feof(f))
   {
+	  if(VARS.emergencyexit == 1) break;
      fgetc(f);
   }
   pclose(f);
@@ -1371,6 +1386,7 @@ void net_wifi_deasoc(NET *nt)
    printf("Desasociando con iw.\n");
    while(!feof(f))
    {
+	   if(VARS.emergencyexit == 1) break;
      fgetc(f);
    }
 
@@ -1390,6 +1406,7 @@ void net_wifi_deasoc(NET *nt)
   printf("Desasociando con iwconfig.\n");
   while(!feof(f))
   {
+	  if(VARS.emergencyexit == 1) break;
      fgetc(f);
   }
   pclose(f);
